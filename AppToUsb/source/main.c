@@ -25,26 +25,26 @@ int file_compare(char *fname1, char *fname2)
 {
     long size1, size2;
     int  bytesRead1 = 0, bytesRead2 = 0, lastBytes = 100, res = 0, i;
-    FILE *file1 = fopen(fname1, "rb"), *file2 = fopen(fname2, "rb");
+    int file1 = open(fname1,  O_RDONLY, 0), file2 = open(fname2,  O_RDONLY, 0);
     char *buffer1 = malloc(65536), *buffer2 = malloc(65536);
     if (!file1 || !file2) {
         return res;
     }
-    fseek (file1, 0, SEEK_END);
-    fseek (file2, 0, SEEK_END);
-    size1 = ftell (file1);
-    size2 = ftell (file2);
-    fseek(file1, 0L, SEEK_SET);
-    fseek(file2, 0L, SEEK_SET);
+    lseek (file1, 0, SEEK_END);
+    lseek (file2, 0, SEEK_END);
+    size1 = lseek(file1, 0, SEEK_CUR);
+    size2 = lseek(file2, 0, SEEK_CUR);
+    lseek(file1, 0L, SEEK_SET);
+    lseek(file2, 0L, SEEK_SET);
     if (size1 != size2) {
         res = 0;
         goto exit;
     }
     if (size1 < lastBytes) lastBytes = size1;
-    fseek(file1, -lastBytes, SEEK_END);
-    fseek(file2, -lastBytes, SEEK_END);
-    bytesRead1 = fread(buffer1, sizeof(char), lastBytes, file1);
-    bytesRead2 = fread(buffer2, sizeof(char), lastBytes, file2);
+    lseek(file1, -lastBytes, SEEK_END);
+    lseek(file2, -lastBytes, SEEK_END);
+    bytesRead1 = read(file1, buffer1, sizeof(char));
+    bytesRead2 = read(file2, buffer2, sizeof(char));
     if (bytesRead1 > 0 && bytesRead1 == bytesRead2) {
         for ( i = 0; i < bytesRead1; i++) {
             if (buffer1[i] != buffer2[i]) {
@@ -57,8 +57,8 @@ int file_compare(char *fname1, char *fname2)
     free(buffer1);
     free(buffer2);
     exit:
-    fclose(file1);
-    fclose(file2);
+    close(file1);
+    close(file2);
     return res;
 }
 
@@ -150,17 +150,17 @@ int split_string(char *str, char c, char ***arr)
 }
 
 
-int fgetc(FILE *fp)
+int fgetc(int fp)
 {
   char c;
 
-  if (fread(&c, 1, 1, fp) == 0)
+  if (read(fp, &c, 1) == 0)
     return (-1);
   return (c);
 }
 
 
-char *read_string(FILE* f)
+char *read_string(int f)
 {
     char *string = malloc(sizeof(char) * 65536);
     int c;
@@ -178,10 +178,10 @@ char *read_string(FILE* f)
 
 int file_exists(char *fname)
 {
-    FILE *file = fopen(fname, "rb");
-    if (file)
+    int file = open(fname, O_RDONLY, 0);
+    if (file != -1)
     {
-        fclose(file);
+        close(file);
         return 1;
     }
     return 0;
@@ -219,11 +219,11 @@ void makeini()
 {
     if (!file_exists(ini_file_path)) 
     {
-    FILE *ini = fopen(ini_file_path,"wb");
+    int ini = open(ini_file_path, O_WRONLY | O_CREAT | O_TRUNC, 0777);
     char *buffer;
     buffer ="To check the usb root for the pkg file to save time copying from the internal ps4 drive then uncomment the line below.\r\nbut remember this will move the pkg from the root directory to the PS4 folder.\r\n//CHECK_USB\r\n\r\nTo rename previously linked pkg files to the new format uncomment the line below.\r\n//RENAME_APP\r\n\r\nTo disable the processing of icons/art and sound uncomment the line below.\r\n//DISABLE_META\r\n\r\nTo leave game updates on the internal drive uncomment the line below.\r\n//IGNORE_UPDATES\r\n\r\nTo move DLC to the usb hdd uncomment the line below.\r\n//MOVE_DLC\r\n\r\nTo use this list as a list of games you want to move not ignore then uncomment the line below.\r\n//MODE_MOVE\r\n\r\nExample ignore or move usage.\r\n\r\nCUSAXXXX1\r\nCUSAXXXX2\r\nCUSAXXXX3";
-    fwrite(buffer, 1, strlen(buffer), ini);
-    fclose(ini);
+    write(ini, buffer, strlen(buffer));
+    close(ini);
     }
 }
 
@@ -232,10 +232,10 @@ char *getContentID(char* pkgFile)
 {
         char buffer[37];
         char *retval = malloc(sizeof(char)*37);
-        FILE *pfile = fopen(pkgFile, "rb");
-        fseek (pfile, 64, SEEK_SET);
-        fread(buffer, 1, sizeof(buffer), pfile);
-        fclose(pfile);
+        int pfile = open(pkgFile, O_RDONLY, 0);
+        lseek (pfile, 64, SEEK_SET);
+        read(pfile, buffer, sizeof(buffer));
+        close(pfile);
         strcpy(retval, buffer);
         return retval;
 }
@@ -247,9 +247,9 @@ char *getPkgName(char* sourcefile)
    char *jfile = replace_str(sourcefile, ".pkg", ".json");
    if (file_exists(jfile)) 
    {
-      FILE *cfile = fopen(jfile, "rb");
+      int cfile = open(jfile, O_RDONLY, 0);
       char *idata = read_string(cfile);
-      fclose(cfile);
+      close(cfile);
       char *ret;
       ret = strstr(idata, "\"url\":\"");
       if (ret != NULL)
@@ -277,9 +277,9 @@ int isinlist(char *sourcefile)
 {
         if (file_exists(ini_file_path)) 
         {
-            FILE *cfile = fopen(ini_file_path, "rb");
+            int cfile = open(ini_file_path, O_RDONLY, 0);
             char *idata = read_string(cfile);
-            fclose(cfile);
+            close(cfile);
             if (strlen(idata) != 0)
             {
              char *tmpstr;
@@ -319,9 +319,9 @@ int ismovemode()
 {
         if (file_exists(ini_file_path)) 
         {
-            FILE *cfile = fopen(ini_file_path, "rb");
+            int cfile = open(ini_file_path, O_RDONLY, 0);
             char *idata = read_string(cfile);
-            fclose(cfile);
+            close(cfile);
             if (strlen(idata) != 0)
             {
                 if(strstr(idata, "//MODE_MOVE") != NULL) 
@@ -347,9 +347,9 @@ int isusbcheck()
 {
         if (file_exists(ini_file_path)) 
         {
-            FILE *cfile = fopen(ini_file_path, "rb");
+            int cfile = open(ini_file_path, O_RDONLY, 0);
             char *idata = read_string(cfile);
-            fclose(cfile);
+            close(cfile);
             if (strlen(idata) != 0)
             {
                 if(strstr(idata, "//CHECK_USB") != NULL) 
@@ -375,9 +375,9 @@ int isignupdates()
 {
         if (file_exists(ini_file_path)) 
         {
-            FILE *cfile = fopen(ini_file_path, "rb");
+            int cfile = open(ini_file_path, O_RDONLY, 0);
             char *idata = read_string(cfile);
-            fclose(cfile);
+            close(cfile);
             if (strlen(idata) != 0)
             {
                 if(strstr(idata, "//IGNORE_UPDATES") != NULL) 
@@ -403,9 +403,9 @@ int isrelink()
 {
         if (file_exists(ini_file_path)) 
         {
-            FILE *cfile = fopen(ini_file_path, "rb");
+            int cfile = open(ini_file_path, O_RDONLY, 0);
             char *idata = read_string(cfile);
-            fclose(cfile);
+            close(cfile);
             if (strlen(idata) != 0)
             {
                 if(strstr(idata, "//RENAME_APP") != NULL) 
@@ -431,9 +431,9 @@ int isnometa()
 {
         if (file_exists(ini_file_path)) 
         {
-            FILE *cfile = fopen(ini_file_path, "rb");
+            int cfile = open(ini_file_path, O_RDONLY, 0);
             char *idata = read_string(cfile);
-            fclose(cfile);
+            close(cfile);
             if (strlen(idata) != 0)
             {
                 if(strstr(idata, "//DISABLE_META") != NULL) 
@@ -459,9 +459,9 @@ int isdlc()
 {
         if (file_exists(ini_file_path)) 
         {
-            FILE *cfile = fopen(ini_file_path, "rb");
+            int cfile = open(ini_file_path, O_RDONLY, 0);
             char *idata = read_string(cfile);
-            fclose(cfile);
+            close(cfile);
             if (strlen(idata) != 0)
             {
                 if(strstr(idata, "//MOVE_DLC") != NULL) 
@@ -487,18 +487,18 @@ void resetflags()
 {
     if (file_exists(ini_file_path)) 
     {
-       FILE *cfile = fopen(ini_file_path, "rb");
+       int cfile = open(ini_file_path, O_RDONLY, 0);
        char *idata = read_string(cfile);
-       fclose(cfile);
+       close(cfile);
        if (strlen(idata) != 0)
        {
           if(strstr(idata, "//RENAME_APP") == NULL) 
           {
              idata = replace_str(idata, "RENAME_APP", "//RENAME_APP");
           }
-          FILE *dfile = fopen(ini_file_path,"wb");
-          fwrite(idata, 1, strlen(idata), dfile);
-          fclose(dfile);
+          int dfile = open(ini_file_path, O_WRONLY | O_CREAT | O_TRUNC, 0777);
+          write(dfile, idata, strlen(idata));
+          close(dfile);
        }
     }
 }
@@ -506,25 +506,25 @@ void resetflags()
 
 void copySmFile(char *sourcefile, char* destfile)
 {
-     FILE *src = fopen(sourcefile, "rb");
-     if (src)
-     {
-         FILE *out = fopen(destfile,"wb");
-         if (out)
-         {
+    int src = open(sourcefile, O_RDONLY, 0);
+    if (src != -1)
+    {
+        int out = open(destfile, O_WRONLY | O_CREAT | O_TRUNC, 0777);
+        if (out != -1)
+        {
              size_t bytes;
              char *buffer = malloc(65536);
              if (buffer != NULL)
              {
-                 while (0 < (bytes = fread(buffer, 1, 65536, src)))
-                     fwrite(buffer, 1, bytes, out);
+                 while (0 < (bytes = read(src, buffer, 65536)))
+                     write(out, buffer, bytes);
                      free(buffer);
              }
-             fclose(out);
+             close(out);
          }
          else {
          }
-         fclose(src);
+         close(src);
      }
      else {
      }
@@ -534,11 +534,11 @@ void copySmFile(char *sourcefile, char* destfile)
 
 void copyFile(char *sourcefile, char* destfile)
 {
-    FILE *src = fopen(sourcefile, "rb");
-    if (src)
+    int src = open(sourcefile, O_RDONLY, 0);
+    if (src != -1)
     {
-        FILE *out = fopen(destfile,"wb");
-        if (out)
+        int out = open(destfile, O_WRONLY | O_CREAT | O_TRUNC, 0777);
+        if (out != -1)
         {
             cfile = sourcefile;
             isxfer = 1;
@@ -546,11 +546,11 @@ void copyFile(char *sourcefile, char* destfile)
             char *buffer = malloc(65536);
             if (buffer != NULL)
             {
-                fseek(src, 0L, SEEK_END);
-                bytes_size = ftell(src);
-                fseek(src, 0L, SEEK_SET);
-                while (0 < (bytes = fread(buffer, 1, 65536, src))) {
-                    fwrite(buffer, 1, bytes, out);
+                lseek(src, 0L, SEEK_END);
+                bytes_size = lseek(src, 0, SEEK_CUR);
+                lseek(src, 0L, SEEK_SET);
+                while (0 < (bytes = read(src, buffer, 65536))) {
+                    write(out, buffer, bytes);
                     bytes_copied += bytes;
                     if (bytes_copied > bytes_size) bytes_copied = bytes_size;
                    xfer_pct = bytes_copied * 100 / bytes_size;
@@ -558,7 +558,7 @@ void copyFile(char *sourcefile, char* destfile)
                 }
                 free(buffer);
             }
-            fclose(out);
+            close(out);
             isxfer = 0;
             xfer_pct = 0;
             xfer_cnt = 0;
@@ -567,7 +567,7 @@ void copyFile(char *sourcefile, char* destfile)
         }
         else {
         }
-        fclose(src);
+        close(src);
     }
     else {
     }
@@ -894,9 +894,6 @@ void copyDir(char *sourcedir, char* destdir)
 }
 
 
-
-
-
 void *nthread_func(void *arg)
 {
         time_t t1, t2;
@@ -953,15 +950,19 @@ int _main(struct thread *td) {
     initLibc();
     initPthread();
     DIR *dir;
+
+
     dir = opendir("/user/app");
     if (!dir)
     {
        syscall(11,patcher,td);
+
     }
     else
     {
        closedir(dir);
     }
+
     initSysUtil();
         xfer_cnt = 0;
         isxfer = 0;
@@ -974,8 +975,8 @@ int _main(struct thread *td) {
         sceKernelSleep(10);
         systemMessage("Last warning\n\nUnplug your usb drive to cancel this");
         sceKernelSleep(10);
-        FILE *usbdir = fopen("/mnt/usb0/.dirtest", "wb");
-         if (!usbdir)
+        int usbdir = open("/mnt/usb0/.dirtest", O_WRONLY | O_CREAT | O_TRUNC, 0777);
+         if (usbdir == -1)
             {
                   systemMessage("No usb mount found.\nYou must use a eXfat formatted usb hdd\nThe USB drive must be plugged into USB0");
                   nthread_run = 0;
@@ -983,7 +984,7 @@ int _main(struct thread *td) {
             }
             else
             {
-                        fclose(usbdir);
+                        close(usbdir);
                         unlink("/mnt/usb0/.dirtest");
                         mkdir("/mnt/usb0/PS4/", 0777);
                         sprintf(ini_file_path, "/mnt/usb0/%s", INI_FILE);

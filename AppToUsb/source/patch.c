@@ -42,7 +42,7 @@ int patcher(struct thread *td){
 	void* kernel_base = &((uint8_t*)__readmsr(0xC0000082))[-0x1C0];
 	uint8_t* kernel_ptr = (uint8_t*)kernel_base;
 	void** got_prison0 =   (void**)&kernel_ptr[0x10986A0];
-	void** got_rootvnode = (void**)&kernel_ptr[0x22C19F0];
+	void** got_rootvnode = (void**)&kernel_ptr[0x22C1A70];
 
 	cred->cr_uid = 0;
 	cred->cr_ruid = 0;
@@ -76,3 +76,4 @@ int patcher(struct thread *td){
 
 	return 0;
 }
+
