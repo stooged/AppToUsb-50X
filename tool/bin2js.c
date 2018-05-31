@@ -18,7 +18,7 @@ int main(int argc, char** argv)
   fread(b, l, 1, f);
   fclose(f);
   uint32_t *u = (uint32_t *)b;
-  printf("var payload = [");
+  printf("var payload=[");
   for (int i = 0; i < ll; i++)
   {
     printf("%u", *u++);
@@ -27,3 +27,4 @@ int main(int argc, char** argv)
   printf("];\n");
   free(b);
 }
+

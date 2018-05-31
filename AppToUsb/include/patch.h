@@ -42,7 +42,6 @@ struct thread {
     	struct proc *td_proc;
 };
 
-
 int patcher(struct thread *td);
 
 #endif

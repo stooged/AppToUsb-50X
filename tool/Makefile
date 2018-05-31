@@ -7,3 +7,4 @@ bin2js: bin2js.c
 
 clean:
 	rm bin2js
+
