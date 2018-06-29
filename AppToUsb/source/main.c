@@ -1,7 +1,5 @@
 #include "ps4.h"
-#include "pkg.h"
 #include "patch.h"
-
 
 #define INI_FILE "AppToUsb.ini"
 
@@ -13,206 +11,6 @@ long xfer_cnt;
 char *cfile;
 int tmpcnt;
 int isxfer;
-
-
-void systemMessage(char* msg) {
- 	char buffer[512]; 
- 	sprintf(buffer, "%s\n\n\n\n\n\n\n", msg);
- 	sceSysUtilSendSystemNotificationWithText(0x81, buffer);
-}
-
-int file_compare(char *fname1, char *fname2)
-{
-    long size1, size2;
-    int  bytesRead1 = 0, bytesRead2 = 0, lastBytes = 100, res = 0, i;
-    int file1 = open(fname1,  O_RDONLY, 0), file2 = open(fname2,  O_RDONLY, 0);
-    char *buffer1 = malloc(65536), *buffer2 = malloc(65536);
-    if (!file1 || !file2) {
-        return res;
-    }
-    lseek (file1, 0, SEEK_END);
-    lseek (file2, 0, SEEK_END);
-    size1 = lseek(file1, 0, SEEK_CUR);
-    size2 = lseek(file2, 0, SEEK_CUR);
-    lseek(file1, 0L, SEEK_SET);
-    lseek(file2, 0L, SEEK_SET);
-    if (size1 != size2) {
-        res = 0;
-        goto exit;
-    }
-    if (size1 < lastBytes) lastBytes = size1;
-    lseek(file1, -lastBytes, SEEK_END);
-    lseek(file2, -lastBytes, SEEK_END);
-    bytesRead1 = read(file1, buffer1, sizeof(char));
-    bytesRead2 = read(file2, buffer2, sizeof(char));
-    if (bytesRead1 > 0 && bytesRead1 == bytesRead2) {
-        for ( i = 0; i < bytesRead1; i++) {
-            if (buffer1[i] != buffer2[i]) {
-                res = 0;
-                goto exit;
-            }
-        }
-        res = 1;
-    }
-    free(buffer1);
-    free(buffer2);
-    exit:
-    close(file1);
-    close(file2);
-    return res;
-}
-
-
-char *replace_str( char *str,  char *orig,  char *rep)
-{
-    char *ret;
-    int i, count = 0;
-    size_t newlen = strlen(rep);
-    size_t oldlen = strlen(orig);
-    for (i = 0; str[i] != '\0'; i++) {
-       if (strstr(&str[i], orig) == &str[i]) {
-          count++;
-          i += oldlen - 1;
-       }
-    }
-    ret = malloc(i + count * (newlen - oldlen));
-    if (ret == NULL)
-    return str;
-    i = 0;
-    while (*str) 
-	{
-       if (strstr(str, orig) == str) {
-       strcpy(&ret[i], rep);
-       i += newlen;
-       str += oldlen;
-       } 
-	   else
-       ret[i++] = *str++;
-     }
-     ret[i] = '\0';
-     return ret;
-}
-
-
-int split_string(char *str, char c, char ***arr)
-{
-    int count = 1;
-    int token_len = 1;
-    int i = 0;
-    char *p;
-    char *t;
-    p = str;
-    while (*p != '\0')
-    {
-        if (*p == c)
-            count++;
-        p++;
-    }
-    *arr = (char**) malloc(sizeof(char*) * count);
-    if (*arr == NULL)
-        return 0;
-    p = str;
-    while (*p != '\0')
-    {
-        if (*p == c)
-        {
-            (*arr)[i] = (char*) malloc( sizeof(char) * token_len );
-            if ((*arr)[i] == NULL)
-                return 0;
-            token_len = 0;
-            i++;
-        }
-        p++;
-        token_len++;
-    }
-    (*arr)[i] = (char*) malloc( sizeof(char) * token_len );
-    if ((*arr)[i] == NULL)
-        return 0;
-    i = 0;
-    p = str;
-    t = ((*arr)[i]);
-    while (*p != '\0')
-    {
-        if (*p != c && *p != '\0')
-        {
-            *t = *p;
-            t++;
-        }
-        else
-        {
-            *t = '\0';
-            i++;
-            t = ((*arr)[i]);
-        }
-        p++;
-    }
-    return count;
-}
-
-
-int fgetc(int fp)
-{
-  char c;
-
-  if (read(fp, &c, 1) == 0)
-    return (-1);
-  return (c);
-}
-
-
-char *read_string(int f)
-{
-    char *string = malloc(sizeof(char) * 65536);
-    int c;
-    int length = 0;
-    if (!string) return string;
-    while((c = fgetc(f)) != -1)
-    {
-        string[length++] = c;
-    }
-    string[length++] = '\0';
-
-    return realloc(string, sizeof(char) * length);
-}
-
-
-int file_exists(char *fname)
-{
-    int file = open(fname, O_RDONLY, 0);
-    if (file != -1)
-    {
-        close(file);
-        return 1;
-    }
-    return 0;
-}
-
-
-int dir_exists(char *dname)
-{
-    DIR *dir = opendir(dname);
-
-    if (dir)
-    {
-        closedir(dir);
-        return 1;
-    }
-    return 0;
-}
-
-
-int symlink_exists(const char* fname)
-{
-    struct stat statbuf;
-    if (lstat(fname, &statbuf) < 0) {
-        return -1;
-    }
-    if (S_ISLNK(statbuf.st_mode) == 1) {
-        return 1;
-    } else {
-        return 0;
-    }
-}
 
 
 void makeini()
@@ -504,34 +302,6 @@ void resetflags()
 }
 
 
-void copySmFile(char *sourcefile, char* destfile)
-{
-    int src = open(sourcefile, O_RDONLY, 0);
-    if (src != -1)
-    {
-        int out = open(destfile, O_WRONLY | O_CREAT | O_TRUNC, 0777);
-        if (out != -1)
-        {
-             size_t bytes;
-             char *buffer = malloc(65536);
-             if (buffer != NULL)
-             {
-                 while (0 < (bytes = read(src, buffer, 65536)))
-                     write(out, buffer, bytes);
-                     free(buffer);
-             }
-             close(out);
-         }
-         else {
-         }
-         close(src);
-     }
-     else {
-     }
-}
-
-
-
 void copyFile(char *sourcefile, char* destfile)
 {
     int src = open(sourcefile, O_RDONLY, 0);
@@ -784,7 +554,7 @@ void copyMeta(char *sourcedir, char* destdir, int tousb)
                       {
                          if (!file_exists(dst_path)) 
                          {
-                            copySmFile(src_path, dst_path);
+                            copy_File(src_path, dst_path);
                          }
                       }
                       else
@@ -793,7 +563,7 @@ void copyMeta(char *sourcedir, char* destdir, int tousb)
                          {
                          if (!file_compare(src_path, dst_path))
                             {
-                               copySmFile(src_path, dst_path);
+                               copy_File(src_path, dst_path);
                             }
                          }
                       }
@@ -825,7 +595,7 @@ void makePkgInfo(char *pkgFile, char *destpath)
            free(cid);
            if (!file_exists(dstfile))
            {
-              copySmFile(srcfile, dstfile);
+              copy_File(srcfile, dstfile);
            }
         }
          sprintf(srcfile, "/user/appmeta/%s", titleid);
