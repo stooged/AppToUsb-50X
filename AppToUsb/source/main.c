@@ -6,12 +6,13 @@
 int nthread_run;
 char notify_buf[1024];
 char ini_file_path[256];
+char usb_mount_path[256];
 int  xfer_pct;
 long xfer_cnt;
 char *cfile;
 int tmpcnt;
 int isxfer;
-
+int hasfound = 0;
 
 void makeini()
 {
@@ -19,7 +20,7 @@ void makeini()
     {
     int ini = open(ini_file_path, O_WRONLY | O_CREAT | O_TRUNC, 0777);
     char *buffer;
-    buffer ="To check the usb root for the pkg file to save time copying from the internal ps4 drive then uncomment the line below.\r\nbut remember this will move the pkg from the root directory to the PS4 folder.\r\n//CHECK_USB\r\n\r\nTo rename previously linked pkg files to the new format uncomment the line below.\r\n//RENAME_APP\r\n\r\nTo disable the processing of icons/art and sound uncomment the line below.\r\n//DISABLE_META\r\n\r\nTo leave game updates on the internal drive uncomment the line below.\r\n//IGNORE_UPDATES\r\n\r\nTo move DLC to the usb hdd uncomment the line below.\r\n//MOVE_DLC\r\n\r\nTo use this list as a list of games you want to move not ignore then uncomment the line below.\r\n//MODE_MOVE\r\n\r\nExample ignore or move usage.\r\n\r\nCUSAXXXX1\r\nCUSAXXXX2\r\nCUSAXXXX3";
+    buffer ="To skip copying pkg files to this hdd uncomment the line below.\r\nbe aware when using this if your usb mount points switch it will break the links and the games will not load until you plug the drives back in the correct order.\r\n//SKIP_DRIVE\r\n\r\nTo check the usb root for the pkg file to save time copying from the internal ps4 drive then uncomment the line below.\r\nbut remember this will move the pkg from the root directory to the PS4 folder.\r\n//CHECK_USB\r\n\r\nTo rename previously linked pkg files to the new format uncomment the line below.\r\n//RENAME_APP\r\n\r\nTo disable the processing of icons/art and sound uncomment the line below.\r\n//DISABLE_META\r\n\r\nTo leave game updates on the internal drive uncomment the line below.\r\n//IGNORE_UPDATES\r\n\r\nTo move DLC to the usb hdd uncomment the line below.\r\n//MOVE_DLC\r\n\r\nTo use this list as a list of games you want to move not ignore then uncomment the line below.\r\n//MODE_MOVE\r\n\r\nExample ignore or move usage.\r\n\r\nCUSAXXXX1\r\nCUSAXXXX2\r\nCUSAXXXX3";
     write(ini, buffer, strlen(buffer));
     close(ini);
     }
@@ -281,6 +282,35 @@ int isdlc()
 }
 
 
+int isskipdrive(char *tmp_ini_path)
+{
+        if (file_exists(tmp_ini_path)) 
+        {
+            int cfile = open(tmp_ini_path, O_RDONLY, 0);
+            char *idata = read_string(cfile);
+            close(cfile);
+            if (strlen(idata) != 0)
+            {
+                if(strstr(idata, "//SKIP_DRIVE") != NULL) 
+                {
+                   return 0;
+                }
+                else if(strstr(idata, "SKIP_DRIVE") != NULL) 
+                {
+                   return 1;
+                }
+             return 0;
+             }
+        return 0;
+        }
+        else
+        {
+             return 0;
+        }
+}
+
+
+
 void resetflags()
 {
     if (file_exists(ini_file_path)) 
@@ -429,7 +459,7 @@ void checkusbpkg(char *sourcedir, char* destdir) {
             struct dirent *dp;
             struct stat info;
             char upkg_path[1024];
-            dir = opendir("/mnt/usb0/");
+            dir = opendir(usb_mount_path);
             if (dir) {
             while ((dp = readdir(dir)) != NULL)
             {
@@ -437,7 +467,7 @@ void checkusbpkg(char *sourcedir, char* destdir) {
             {}
             else
             {
-            sprintf(upkg_path, "%s/%s", "/mnt/usb0", dp->d_name);
+            sprintf(upkg_path, "%s/%s", usb_mount_path, dp->d_name);
             if (!stat(upkg_path, &info))
             {
                 if (S_ISREG(info.st_mode))
@@ -714,82 +744,138 @@ void *sthread_func(void *arg)
 }
 
 
+char* getusbpath()
+{
+	int usbdir;
+	char tmppath[64];
+	char a2upath[64];
+	char tmpusb[64];
+	tmpusb[0] = '\0';
+	char *retval;
+	for (int x = 0; x <= 7; x++)
+	{
+		sprintf(tmppath, "/mnt/usb%i/.dirtest", x);
+		usbdir = open(tmppath, O_WRONLY | O_CREAT | O_TRUNC, 0777);
+		if (usbdir != -1)
+		{
+			close(usbdir);
+			unlink(tmppath);
+			sprintf(tmpusb, "/mnt/usb%i", x);
+			sprintf(a2upath, "/mnt/usb%i/PS4/AppToUsb.ini", x);
+			if (file_exists(a2upath))
+			{
+				if (!isskipdrive(a2upath))
+				{
+					retval = malloc (sizeof (char) * 10);
+					strcpy(retval, tmpusb);
+					return retval;
+				}
+				else
+				{
+					hasfound = 1;
+					tmpusb[0] = '\0';
+				}
+			}   
+		}
+	}
+	if (tmpusb[0] != '\0')
+	{
+       retval = malloc (sizeof (char) * 10);
+       strcpy(retval, tmpusb);
+       return retval;
+	}
+	return NULL;
+}
+
 
 int _main(struct thread *td) {
-    initKernel();
-    initLibc();
-    initPthread();
-    DIR *dir;
-
-
-    dir = opendir("/user/app");
-    if (!dir)
-    {
-       syscall(11,patcher,td);
-
-    }
-    else
-    {
-       closedir(dir);
-    }
-
-    initSysUtil();
-        xfer_cnt = 0;
-        isxfer = 0;
+	initKernel();
+	initLibc();
+	initPthread();
+	DIR *dir;
+	dir = opendir("/user/app");
+	if (!dir)
+	{
+		syscall(11,patcher,td);
+	}
+	else
+	{
+		closedir(dir);
+	}
+	initSysUtil();
+	xfer_cnt = 0;
+	isxfer = 0;
 	nthread_run = 1;
 	ScePthread nthread;
 	scePthreadCreate(&nthread, NULL, nthread_func, NULL, "nthread");
 	ScePthread sthread;
 	scePthreadCreate(&sthread, NULL, sthread_func, NULL, "sthread");
-        systemMessage("Warning this payload will modify the filesystem on your PS4\n\nUnplug your usb drive to cancel this");
-        sceKernelSleep(10);
-        systemMessage("Last warning\n\nUnplug your usb drive to cancel this");
-        sceKernelSleep(10);
-        int usbdir = open("/mnt/usb0/.dirtest", O_WRONLY | O_CREAT | O_TRUNC, 0777);
-         if (usbdir == -1)
-            {
-                  systemMessage("No usb mount found.\nYou must use a eXfat formatted usb hdd\nThe USB drive must be plugged into USB0");
-                  nthread_run = 0;
-                  return 0;
-            }
-            else
-            {
-                        close(usbdir);
-                        unlink("/mnt/usb0/.dirtest");
-                        mkdir("/mnt/usb0/PS4/", 0777);
-                        sprintf(ini_file_path, "/mnt/usb0/%s", INI_FILE);
-                        if (!file_exists(ini_file_path))
-                        {
-                        sprintf(ini_file_path, "/mnt/usb0/PS4/%s", INI_FILE);
-                        makeini();
-                        }
-                        systemMessage("Copying Apps to USB0\n\nThis will take a while if you have lots of games installed");
-                        copyDir("/user/app","/mnt/usb0/PS4");
-                        if (!isignupdates())
-                        {
-                           mkdir("/mnt/usb0/PS4/updates/", 0777);
-                           systemMessage("Copying updates to USB0");
-                           copyDir("/user/patch","/mnt/usb0/PS4/updates");
-                        }
-                        if (isdlc())
-                        {
-                           mkdir("/mnt/usb0/PS4/dlc/", 0777);
-                           systemMessage("Copying dlc to USB0");
-                           copyDir("/user/addcont","/mnt/usb0/PS4/dlc");
-                        }
-                        if (!isnometa())
-                        {
-                           systemMessage("Processing appmeta");
-                           copyMeta("/mnt/usb0/PS4","/user/appmeta", 0);
-                        }
-                        if (isrelink())
-                        {
-                           resetflags();
-                        }
-                        systemMessage("Complete.");
-            }
-    nthread_run = 0;
-    return 0;
+	systemMessage("Warning this payload will modify the filesystem on your PS4\n\nUnplug your usb drive to cancel this");
+	sceKernelSleep(10);
+	systemMessage("Last warning\n\nUnplug your usb drive to cancel this");
+	sceKernelSleep(10);
+	char* usb_mnt_path = getusbpath();
+	if (usb_mnt_path != NULL)
+	{
+		sprintf(usb_mount_path, "%s", usb_mnt_path);
+		free(usb_mnt_path);
+		char tmppath[256];
+		sprintf(tmppath, "%s/PS4", usb_mount_path);
+		if (!dir_exists(tmppath)) 
+		{
+			mkdir(tmppath, 0777);
+		}
+		sprintf(ini_file_path, "%s/%s", tmppath, INI_FILE);
+		if (!file_exists(ini_file_path))
+		{
+			makeini();
+		}	 
+		systemMessage("Moving Apps to USB\n\nThis will take a while if you have lots of games installed");
+		copyDir("/user/app",tmppath);
+		if (!isignupdates())
+		{
+			char tmppathp[256];
+			sprintf(tmppathp, "%s/PS4/updates", usb_mount_path);
+			if (!dir_exists(tmppathp)) 
+			{
+				mkdir(tmppathp, 0777);
+			}	   
+			systemMessage("Moving updates to USB");
+			copyDir("/user/patch",tmppathp);
+		}				
+		if (isdlc())
+		{
+			char tmppathd[256];
+			sprintf(tmppathd, "%s/PS4/dlc", usb_mount_path);
+			if (!dir_exists(tmppathd)) 
+			{
+				mkdir(tmppathd, 0777);
+			}
+			systemMessage("Moving dlc to USB");
+			copyDir("/user/addcont",tmppathd); 
+		}	
+		if (!isnometa())
+		{
+			systemMessage("Processing appmeta");
+			copyMeta(tmppath,"/user/appmeta", 0);
+		}
+		if (isrelink())
+		{
+			resetflags();
+		}
+		systemMessage("Complete.");
+	}
+	else
+	{
+		if (hasfound == 1)
+		{
+			systemMessage("A usb hdd was found but it was set to SKIP_DRIVE\n\nNo other usb hdd was found");
+		}
+		else
+		{
+			systemMessage("No usb hdd found.\n\nYou must use a exFat formatted usb hdd");
+		}	
+	}
+	nthread_run = 0;
+	return 0;
 }
-
-
