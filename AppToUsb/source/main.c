@@ -13,6 +13,7 @@ char *cfile;
 int tmpcnt;
 int isxfer;
 int hasfound = 0;
+int mntpoint = -1;
 
 void makeini()
 {
@@ -20,7 +21,7 @@ void makeini()
     {
     int ini = open(ini_file_path, O_WRONLY | O_CREAT | O_TRUNC, 0777);
     char *buffer;
-    buffer ="To skip copying pkg files to this hdd uncomment the line below.\r\nbe aware when using this if your usb mount points switch it will break the links and the games will not load until you plug the drives back in the correct order.\r\n//SKIP_DRIVE\r\n\r\nTo check the usb root for the pkg file to save time copying from the internal ps4 drive then uncomment the line below.\r\nbut remember this will move the pkg from the root directory to the PS4 folder.\r\n//CHECK_USB\r\n\r\nTo rename previously linked pkg files to the new format uncomment the line below.\r\n//RENAME_APP\r\n\r\nTo disable the processing of icons/art and sound uncomment the line below.\r\n//DISABLE_META\r\n\r\nTo leave game updates on the internal drive uncomment the line below.\r\n//IGNORE_UPDATES\r\n\r\nTo move DLC to the usb hdd uncomment the line below.\r\n//MOVE_DLC\r\n\r\nTo use this list as a list of games you want to move not ignore then uncomment the line below.\r\n//MODE_MOVE\r\n\r\nExample ignore or move usage.\r\n\r\nCUSAXXXX1\r\nCUSAXXXX2\r\nCUSAXXXX3";
+    buffer ="To skip copying pkg files to this hdd uncomment the line below.\r\nbe aware when using this if your usb mount points switch it will break the links and the games will not load until you plug the drives back in the correct order.\r\n//SKIP_DRIVE\r\n\r\nWhen using skip drive and mulitple drives at the same time you need to specify the intended mount point of the usb hdd.\r\nyour first drive should be 0 and second drive should be 1 ending at a maximum of 7.\r\nthis will prevent the payload writing usb0 links to the usb1 drive if the mount points switch on the console.\r\nMOUNT_POINT=0\r\n\r\nTo check the usb root for the pkg file to save time copying from the internal ps4 drive then uncomment the line below.\r\nbut remember this will move the pkg from the root directory to the PS4 folder.\r\n//CHECK_USB\r\n\r\nTo rename previously linked pkg files to the new format uncomment the line below.\r\n//RENAME_APP\r\n\r\nTo disable the processing of icons/art and sound uncomment the line below.\r\n//DISABLE_META\r\n\r\nTo leave game updates on the internal drive uncomment the line below.\r\n//IGNORE_UPDATES\r\n\r\nTo move DLC to the usb hdd uncomment the line below.\r\n//MOVE_DLC\r\n\r\nTo use this list as a list of games you want to move not ignore then uncomment the line below.\r\n//MODE_MOVE\r\n\r\nExample ignore or move usage.\r\n\r\nCUSAXXXX1\r\nCUSAXXXX2\r\nCUSAXXXX3";
     write(ini, buffer, strlen(buffer));
     close(ini);
     }
@@ -309,6 +310,57 @@ int isskipdrive(char *tmp_ini_path)
         }
 }
 
+
+int mountpoint()
+{
+    if (file_exists(ini_file_path)) 
+        {
+            int cfile = open(ini_file_path, O_RDONLY, 0);
+            char *idata = read_string(cfile);
+            close(cfile);
+            if (strlen(idata) != 0)
+            {
+                if(strstr(idata, "MOUNT_POINT=") != NULL) 
+                {
+					char pnt[2];
+					int spos = substring(idata,"MOUNT_POINT=") + 12;
+					strncpy(pnt, idata+spos, 1);
+					switch(pnt[0]) 
+					{
+					case '0':
+						return 0;
+					case '1':
+						return 1;
+					case '2':	
+						return 2;
+					case '3':
+						return 3;
+					case '4':
+						return 4;
+					case '5':
+						return 5;
+					case '6':
+						return 6;
+					case '7':
+						return 7;
+					default :
+						return -1;
+					}
+					return -1;
+                }
+                else
+                {
+                   return 0;
+                }
+             return 0;
+             }
+        return 0;
+        }
+        else
+        {
+        return 0;
+    }
+}
 
 
 void resetflags()
@@ -760,6 +812,7 @@ char* getusbpath()
 		{
 			close(usbdir);
 			unlink(tmppath);
+			mntpoint = x;
 			sprintf(tmpusb, "/mnt/usb%i", x);
 			sprintf(a2upath, "/mnt/usb%i/PS4/AppToUsb.ini", x);
 			if (file_exists(a2upath))
@@ -772,6 +825,7 @@ char* getusbpath()
 				}
 				else
 				{
+					mntpoint = -1;
 					hasfound = 1;
 					tmpusb[0] = '\0';
 				}
@@ -780,10 +834,11 @@ char* getusbpath()
 	}
 	if (tmpusb[0] != '\0')
 	{
-       retval = malloc (sizeof (char) * 10);
-       strcpy(retval, tmpusb);
-       return retval;
+		retval = malloc (sizeof (char) * 10);
+		strcpy(retval, tmpusb);
+		return retval;
 	}
+	mntpoint = -1;
 	return NULL;
 }
 
@@ -829,7 +884,16 @@ int _main(struct thread *td) {
 		if (!file_exists(ini_file_path))
 		{
 			makeini();
-		}	 
+		}
+		int defmp = mountpoint();
+		if (defmp == -1 || defmp != mntpoint)
+		{
+			char mpmsg[256];		
+			sprintf(mpmsg, "The defined MOUNT_POINT is incorrect.\nMOUNT_POINT=%i is defined but the drive is mounted to USB%i", defmp, mntpoint);
+			systemMessage(mpmsg);
+			nthread_run = 0;
+			return 0;
+		}
 		systemMessage("Moving Apps to USB\n\nThis will take a while if you have lots of games installed");
 		copyDir("/user/app",tmppath);
 		if (!isignupdates())
