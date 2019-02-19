@@ -413,9 +413,19 @@ void copyFile(char *sourcefile, char* destfile)
             close(out);
             isxfer = 0;
             xfer_pct = 0;
-            xfer_cnt = 0;
-            unlink(sourcefile);
-            symlink(destfile, sourcefile);
+            xfer_cnt = 0;		
+            if (file_compare(sourcefile, destfile))
+            {
+                unlink(sourcefile);
+                symlink(destfile, sourcefile);
+            }
+			else
+			{
+				char cmsg[1024];
+				unlink(destfile);
+                sprintf(cmsg, "%s failed to transfer properly", sourcefile);
+                systemMessage(cmsg);
+			}		
         }
         else {
         }
